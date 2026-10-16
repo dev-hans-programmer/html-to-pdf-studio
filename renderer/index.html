@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HTML to PDF Studio</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <aside class="sidebar">
+    <header class="brand">
+      <div class="brand-icon" aria-hidden="true">PDF</div>
+      <div>
+        <h1>HTML to PDF Studio</h1>
+        <p>Format, preview, export</p>
+      </div>
+    </header>
+
+    <section class="panel source-panel">
+      <div class="panel-title-row">
+        <h2>HTML file</h2>
+        <button class="button button-small button-secondary" id="browse-button" type="button">Browse</button>
+      </div>
+      <label class="sr-only" for="path-input">HTML file path</label>
+      <div class="path-row">
+        <input id="path-input" type="text" placeholder="Paste an .html file path" spellcheck="false" />
+        <button class="button button-primary" id="load-button" type="button">Load</button>
+      </div>
+      <div id="file-label" class="file-label muted">No file loaded</div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-title-row">
+        <h2>Page setup</h2>
+        <span class="hint" title="HTML print styles are used by default">?</span>
+      </div>
+      <label class="field-label" for="page-mode">Page size and margins</label>
+      <select id="page-mode">
+        <option value="document">Use HTML print settings</option>
+        <option value="custom">Set custom page and margins</option>
+      </select>
+      <div id="custom-page-settings" class="settings-grid is-hidden">
+        <label class="field"><span>Paper</span><select id="page-size"><option>A4</option><option>Letter</option><option>A3</option><option>A5</option><option>Legal</option></select></label>
+        <label class="field"><span>Orientation</span><select id="orientation"><option value="portrait">Portrait</option><option value="landscape">Landscape</option></select></label>
+        <label class="field"><span>Top (mm)</span><input id="margin-top" type="number" min="0" max="80" step="0.5" /></label>
+        <label class="field"><span>Right (mm)</span><input id="margin-right" type="number" min="0" max="80" step="0.5" /></label>
+        <label class="field"><span>Bottom (mm)</span><input id="margin-bottom" type="number" min="0" max="80" step="0.5" /></label>
+        <label class="field"><span>Left (mm)</span><input id="margin-left" type="number" min="0" max="80" step="0.5" /></label>
+      </div>
+      <label class="check-row"><input id="print-background" type="checkbox" checked /><span>Print background colors and images</span></label>
+    </section>
+
+    <section class="panel section-panel">
+      <div class="panel-title-row">
+        <h2>Section adjustments</h2>
+        <span class="hint" title="Select a detected section or enter any CSS selector">?</span>
+      </div>
+      <label class="field-label" for="section-picker">Detected sections</label>
+      <div class="path-row">
+        <select id="section-picker" disabled><option value="">Load an HTML file first</option></select>
+        <button class="button button-secondary button-small" id="use-section-button" type="button" disabled>Use</button>
+      </div>
+      <label class="field-label" for="selector-input">CSS selector</label>
+      <input id="selector-input" class="full-input" type="text" placeholder="Example: .experience, #education" spellcheck="false" />
+
+      <div class="rule-fields">
+        <label class="field"><span>Top margin (mm)</span><input id="rule-margin-top" type="number" step="0.5" placeholder="Keep" /></label>
+        <label class="field"><span>Bottom margin (mm)</span><input id="rule-margin-bottom" type="number" step="0.5" placeholder="Keep" /></label>
+        <label class="field"><span>Left margin (mm)</span><input id="rule-margin-left" type="number" step="0.5" placeholder="Keep" /></label>
+        <label class="field"><span>Right margin (mm)</span><input id="rule-margin-right" type="number" step="0.5" placeholder="Keep" /></label>
+        <label class="field"><span>Top padding (mm)</span><input id="rule-padding-top" type="number" step="0.5" placeholder="Keep" /></label>
+        <label class="field"><span>Bottom padding (mm)</span><input id="rule-padding-bottom" type="number" step="0.5" placeholder="Keep" /></label>
+        <label class="field"><span>Font size (%)</span><input id="rule-font-scale" type="number" min="60" max="160" step="1" placeholder="Keep" /></label>
+        <label class="field"><span>Line height</span><input id="rule-line-height" type="number" min="0.7" max="3" step="0.05" placeholder="Keep" /></label>
+        <label class="field"><span>Text color</span><input id="rule-color" type="text" placeholder="Keep (e.g. #1a3f7a)" spellcheck="false" /></label>
+        <label class="field"><span>Background color</span><input id="rule-background-color" type="text" placeholder="Keep (e.g. #f3f6fa)" spellcheck="false" /></label>
+        <label class="field"><span>Page break before</span><select id="rule-break-before"><option value="auto">Automatic</option><option value="page">New page</option><option value="left">Left page</option><option value="right">Right page</option></select></label>
+        <label class="field"><span>Page break after</span><select id="rule-break-after"><option value="auto">Automatic</option><option value="page">New page</option><option value="left">Left page</option><option value="right">Right page</option></select></label>
+      </div>
+      <label class="check-row check-row-compact"><input id="rule-keep-together" type="checkbox" /><span>Keep this section together on a page</span></label>
+      <p class="help-text">Changes apply automatically and refresh the PDF preview.</p>
+      <div class="rule-actions">
+        <button class="button button-secondary" id="add-rule-button" type="button">Add / update rule</button>
+        <button class="button button-quiet" id="clear-rule-form-button" type="button">Clear</button>
+      </div>
+      <div id="rules-list" class="rules-list"><div class="empty-rules">No section adjustments yet.</div></div>
+    </section>
+
+    <section class="panel advanced-panel">
+      <details>
+        <summary>Advanced print CSS</summary>
+        <p class="help-text">Add CSS overrides for precise layout fixes. These affect the preview and PDF only; the source HTML is left untouched.</p>
+        <label class="sr-only" for="custom-css">Custom print CSS</label>
+        <textarea id="custom-css" rows="6" spellcheck="false" placeholder=".job { margin-bottom: 6mm; }&#10;h2 { break-after: avoid; }"></textarea>
+      </details>
+    </section>
+
+    <footer class="sidebar-footer">
+      <div id="status-line" class="status-line" role="status">Ready</div>
+      <div class="footer-actions">
+        <button class="button button-secondary" id="reset-button" type="button" disabled>Reset</button>
+        <button class="button button-primary export-button" id="export-button" type="button" disabled>Export PDF</button>
+      </div>
+    </footer>
+  </aside>
+
+  <main class="preview-shell">
+    <div class="preview-empty" id="preview-empty">
+      <div class="preview-empty-icon" aria-hidden="true">↗</div>
+      <h2>PDF preview</h2>
+      <p>Choose an HTML file to render a print preview. Adjust sections on the left; the preview updates automatically.</p>
+    </div>
+  </main>
+
+  <script src="./app.js"></script>
+</body>
+</html>
