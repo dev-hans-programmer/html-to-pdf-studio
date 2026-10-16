@@ -20,6 +20,8 @@ Choose an HTML file with **Browse**, paste a path and press **Load**, or drag an
 - Use the HTML document's own `@page` and print styles, or override page size, orientation, and page margins.
 - Choose detected sections or enter a CSS selector, then set per-section margins, padding, font scale, text and background colors, line height, page breaks, and keep-together behavior.
 - Section and page changes save automatically and regenerate the PDF preview. Export waits for any pending edit to finish rendering.
+- Use section presets for tighter spacing, smaller text, or added space above a section.
+- Switch between light and dark app themes; choose colors with a picker or enter any supported CSS color.
 - Add advanced CSS overrides for other print-specific fixes.
 - Settings are saved locally per source file. The source HTML is never rewritten.
 

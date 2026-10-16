@@ -18,7 +18,13 @@ const elements = {
   status: $('#status-line'),
   reset: $('#reset-button'),
   export: $('#export-button'),
-  previewEmpty: $('#preview-empty')
+  previewEmpty: $('#preview-empty'),
+  previewFileName: $('#preview-file-name'),
+  previewState: $('#preview-state'),
+  previewStateLabel: $('#preview-state-label'),
+  themeToggle: $('#theme-toggle'),
+  themeToggleLabel: $('#theme-toggle-label'),
+  emptyBrowse: $('#empty-browse-button')
 };
 
 const ruleFields = {
@@ -31,7 +37,9 @@ const ruleFields = {
   fontScale: $('#rule-font-scale'),
   lineHeight: $('#rule-line-height'),
   color: $('#rule-color'),
+  colorPicker: $('#rule-color-picker'),
   backgroundColor: $('#rule-background-color'),
+  backgroundColorPicker: $('#rule-background-color-picker'),
   breakBefore: $('#rule-break-before'),
   breakAfter: $('#rule-break-after'),
   keepTogether: $('#rule-keep-together')
@@ -55,6 +63,7 @@ function setStatus(message, kind = '') {
   elements.status.textContent = message;
   elements.status.classList.toggle('is-error', kind === 'error');
   elements.status.classList.toggle('is-success', kind === 'success');
+  elements.previewState.classList.toggle('is-error', kind === 'error');
 }
 
 function setBusy(busy) {
@@ -62,6 +71,44 @@ function setBusy(busy) {
   elements.browse.disabled = busy;
   elements.load.disabled = busy;
   elements.export.disabled = busy || !currentFile;
+  elements.previewState.classList.toggle('is-busy', busy);
+}
+
+function setPreviewDocument(fileName = '') {
+  elements.previewFileName.textContent = fileName || 'No document loaded';
+  elements.previewEmpty.classList.toggle('is-hidden', Boolean(fileName));
+}
+
+function setTheme(theme) {
+  const selected = theme === 'dark' ? 'dark' : 'light';
+  document.documentElement.dataset.theme = selected;
+  const nextTheme = selected === 'dark' ? 'light' : 'dark';
+  elements.themeToggleLabel.textContent = selected === 'dark' ? 'Light theme' : 'Dark theme';
+  elements.themeToggle.setAttribute('aria-label', `Switch to ${nextTheme} theme`);
+  elements.themeToggle.title = `Switch to ${nextTheme} theme`;
+  try { localStorage.setItem('html-pdf-studio-theme', selected); } catch {}
+  window.studioApi.setPreviewTheme(selected).catch(() => {});
+}
+
+function colorToHex(value) {
+  if (!value || !CSS.supports('color', value)) return null;
+  const context = document.createElement('canvas').getContext('2d');
+  context.fillStyle = '#000000';
+  context.fillStyle = value;
+  if (/^#[\da-f]{6}$/i.test(context.fillStyle)) return context.fillStyle;
+  const probe = document.createElement('span');
+  probe.style.color = value;
+  document.body.append(probe);
+  const normalized = getComputedStyle(probe).color;
+  probe.remove();
+  const channels = normalized.match(/^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i);
+  if (!channels) return null;
+  return `#${channels.slice(1, 4).map((channel) => Number(channel).toString(16).padStart(2, '0')).join('')}`;
+}
+
+function syncColorPicker(textInput, picker) {
+  const hex = colorToHex(textInput.value.trim());
+  if (hex) picker.value = hex;
 }
 
 function currentRuleValues() {
@@ -87,6 +134,8 @@ function fillRuleForm(rule = null) {
   }
   ruleFields.color.value = rule?.color || '';
   ruleFields.backgroundColor.value = rule?.backgroundColor || '';
+  syncColorPicker(ruleFields.color, ruleFields.colorPicker);
+  syncColorPicker(ruleFields.backgroundColor, ruleFields.backgroundColorPicker);
   ruleFields.breakBefore.value = rule?.breakBefore || 'auto';
   ruleFields.breakAfter.value = rule?.breakAfter || 'auto';
   ruleFields.keepTogether.checked = Boolean(rule?.keepTogether);
@@ -255,6 +304,7 @@ async function loadPath(filePath) {
     elements.pathInput.value = currentFile;
     elements.fileLabel.textContent = result.fileName;
     elements.fileLabel.classList.remove('muted');
+    setPreviewDocument(result.fileName);
     sections = result.sections || [];
     hydrateSettings(result.settings);
     elements.reset.disabled = false;
@@ -275,6 +325,7 @@ async function openFilePicker() {
     elements.pathInput.value = result.filePath;
     elements.fileLabel.textContent = result.fileName;
     elements.fileLabel.classList.remove('muted');
+    setPreviewDocument(result.fileName);
     sections = result.sections || [];
     hydrateSettings(result.settings);
     elements.reset.disabled = false;
@@ -295,6 +346,27 @@ function usePickedSection() {
   }
   elements.selector.value = selector;
   fillRuleForm({ selector, label: sections.find((item) => item.selector === selector)?.label });
+}
+
+function applyPreset(name) {
+  if (!currentFile) {
+    setStatus('Load an HTML file before applying a preset.', 'error');
+    return;
+  }
+  if (!elements.selector.value.trim()) {
+    setStatus('Choose a detected section or enter a CSS selector first.', 'error');
+    return;
+  }
+  if (name === 'tighter') {
+    ruleFields.marginBottom.value = '2.5';
+    ruleFields.lineHeight.value = '1.2';
+  } else if (name === 'smaller') {
+    ruleFields.fontScale.value = '90';
+  } else if (name === 'more-top') {
+    ruleFields.marginTop.value = '10';
+  }
+  setStatus('Applying preset and refreshing preview...');
+  queueSettingsUpdate(0);
 }
 
 async function addOrUpdateRule() {
@@ -339,6 +411,7 @@ async function exportPdf() {
 }
 
 elements.browse.addEventListener('click', openFilePicker);
+elements.emptyBrowse.addEventListener('click', openFilePicker);
 elements.load.addEventListener('click', () => loadPath(elements.pathInput.value));
 elements.pathInput.addEventListener('keydown', (event) => { if (event.key === 'Enter') loadPath(elements.pathInput.value); });
 elements.useSection.addEventListener('click', usePickedSection);
@@ -367,34 +440,58 @@ elements.reset.addEventListener('click', async () => {
   catch (error) { setStatus(error.message || String(error), 'error'); }
 });
 elements.export.addEventListener('click', exportPdf);
+elements.themeToggle.addEventListener('click', () => {
+  setTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
+});
+document.querySelectorAll('[data-preset]').forEach((button) => {
+  button.addEventListener('click', () => applyPreset(button.dataset.preset));
+});
+for (const [textInput, picker] of [[ruleFields.color, ruleFields.colorPicker], [ruleFields.backgroundColor, ruleFields.backgroundColorPicker]]) {
+  textInput.addEventListener('input', () => syncColorPicker(textInput, picker));
+  picker.addEventListener('input', () => {
+    textInput.value = picker.value;
+    textInput.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+}
+
+try { setTheme(localStorage.getItem('html-pdf-studio-theme') || 'light'); }
+catch { setTheme('light'); }
+setPreviewDocument();
 
 window.studioApi.onStatus((event) => {
   if (event.type === 'rendering') {
     updateInProgress = true;
     elements.export.disabled = true;
+    elements.previewState.classList.add('is-busy');
     setStatus('Rendering PDF preview...');
+    elements.previewStateLabel.textContent = 'Updating preview';
   }
   if (event.type === 'preview-ready') {
     setStatus('Preview ready. Changes are saved locally.');
+    elements.previewStateLabel.textContent = 'Preview ready';
     elements.export.disabled = false;
     updateInProgress = false;
+    elements.previewState.classList.remove('is-busy');
   }
   if (event.type === 'document-loaded') {
     currentFile = event.filePath;
     elements.pathInput.value = event.filePath;
     elements.fileLabel.textContent = event.fileName;
     elements.fileLabel.classList.remove('muted');
+    setPreviewDocument(event.fileName);
     sections = event.sections || [];
     hydrateSettings(event.settings);
     elements.reset.disabled = false;
     elements.export.disabled = false;
-    elements.previewEmpty.classList.add('is-hidden');
+    elements.previewStateLabel.textContent = 'Rendering preview';
   }
   if (event.type === 'exported') setStatus(`Saved ${event.outputPath}`, 'success');
   if (event.type === 'settings-reset') hydrateSettings(event.settings);
   if (event.type === 'error') {
     setStatus(event.message || 'Something went wrong while creating the preview.', 'error');
+    elements.previewStateLabel.textContent = 'Preview issue';
     updateInProgress = false;
+    elements.previewState.classList.remove('is-busy');
   }
 });
 

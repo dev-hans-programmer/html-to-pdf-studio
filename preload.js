@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld('studioApi', {
   exportPdf: () => ipcRenderer.invoke('studio:export'),
   resetSettings: () => ipcRenderer.invoke('studio:reset-settings'),
   openOutputFolder: (filePath) => ipcRenderer.invoke('studio:open-output-folder', filePath),
+  setPreviewTheme: (theme) => ipcRenderer.invoke('studio:set-preview-theme', theme),
   onStatus: (listener) => {
     const handler = (_event, payload) => listener(payload);
     ipcRenderer.on('studio:status', handler);

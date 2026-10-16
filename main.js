@@ -6,6 +6,7 @@ const { pathToFileURL, fileURLToPath } = require('node:url');
 
 const APP_NAME = 'HTML to PDF Studio';
 const SIDEBAR_WIDTH = 390;
+const PREVIEW_TOOLBAR_HEIGHT = 58;
 const APP_ROOT = __dirname;
 const RENDERER_FILE = path.join(APP_ROOT, 'renderer', 'index.html');
 const DEFAULTS = {
@@ -21,6 +22,7 @@ const DEFAULTS = {
 let mainWindow;
 let previewView;
 let renderWindow;
+let previewTheme = 'light';
 let currentFile = '';
 let currentSettings = structuredClone(DEFAULTS);
 let sections = [];
@@ -214,9 +216,9 @@ function layoutPreview() {
   const [width, height] = mainWindow.getContentSize();
   previewView.setBounds({
     x: SIDEBAR_WIDTH,
-    y: 0,
+    y: PREVIEW_TOOLBAR_HEIGHT,
     width: Math.max(100, width - SIDEBAR_WIDTH),
-    height
+    height: Math.max(100, height - PREVIEW_TOOLBAR_HEIGHT)
   });
 }
 
@@ -225,6 +227,7 @@ function addPreviewView() {
     previewView = new WebContentsView({
       webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, webSecurity: true }
     });
+    previewView.setBackgroundColor(previewTheme === 'dark' ? '#10151e' : '#e9edf3');
     previewView.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
     previewView.webContents.on('will-navigate', (event, url) => {
       if (!url.startsWith('file:')) event.preventDefault();
@@ -377,6 +380,11 @@ function registerIpc() {
     sendStatus('settings-reset', { settings: currentSettings });
     await schedulePreview();
     return currentSettings;
+  });
+  ipcMain.handle('studio:set-preview-theme', (_event, theme) => {
+    previewTheme = theme === 'dark' ? 'dark' : 'light';
+    if (!previewView || previewView.webContents.isDestroyed()) return;
+    previewView.setBackgroundColor(previewTheme === 'dark' ? '#10151e' : '#e9edf3');
   });
   ipcMain.handle('studio:open-output-folder', async (_event, filePath) => {
     if (filePath) await shell.showItemInFolder(filePath);
