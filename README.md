@@ -25,6 +25,9 @@ Choose an HTML file with **Browse**, paste a path and press **Load**, or drag an
 - Adjustment cards summarize active spacing, typography, color, and page-break rules. Invalid values and selectors are highlighted inline.
 - Undo and redo section/page edits with `Cmd/Ctrl+Z` and `Cmd/Ctrl+Shift+Z` (`Cmd/Ctrl+Y` also redoes). Open a file with `Cmd/Ctrl+O` and export with `Cmd/Ctrl+E`.
 - PDF export suggests a filename based on the HTML file, remembers the last output folder, and confirms before replacing an existing PDF.
+- Use the custom File, Edit, View, and Help menus for document actions, adjustment history, themes, and a shortcut reference.
+- On macOS, use the custom window controls in the app bar to close, minimize, or enter full screen.
+- The macOS app bundle uses the custom PDF Studio document icon.
 - Add advanced CSS overrides for other print-specific fixes.
 - Settings are saved locally per source file. The source HTML is never rewritten.
 

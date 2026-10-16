@@ -7,15 +7,83 @@
   <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
-  <aside class="sidebar">
-    <header class="brand">
-      <div class="brand-icon" aria-hidden="true"><span>PDF</span></div>
-      <div>
-        <h1>HTML to PDF Studio</h1>
-        <p>Format · preview · export</p>
+  <header class="app-menu-bar">
+    <div class="window-controls" id="window-controls" role="group" aria-label="Window controls" hidden>
+      <button class="window-control window-control-close" type="button" data-window-action="close" title="Close window" aria-label="Close window"><span aria-hidden="true">×</span></button>
+      <button class="window-control window-control-minimize" type="button" data-window-action="minimize" title="Minimize window" aria-label="Minimize window"><span aria-hidden="true">−</span></button>
+      <button class="window-control window-control-fullscreen" id="fullscreen-control" type="button" data-window-action="fullscreen" title="Enter full screen" aria-label="Enter full screen"><span aria-hidden="true"><i></i><i></i><i></i><i></i></span></button>
+    </div>
+    <div class="app-menu-brand" role="img" aria-label="HTML to PDF Studio">
+      <div class="app-menu-icon" aria-hidden="true">P</div>
+      <span>PDF Studio</span>
+    </div>
+    <nav class="app-menu-nav" aria-label="Application menu">
+      <div class="app-menu-group">
+        <button class="app-menu-trigger" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="file-menu">File</button>
+        <div class="app-menu-popover" id="file-menu" role="menu" aria-label="File" hidden>
+          <div class="menu-section-label">DOCUMENT</div>
+          <button class="menu-command" type="button" role="menuitem" data-menu-command="open">
+            <span class="menu-command-icon" aria-hidden="true">↗</span><span class="menu-command-label">Open HTML file…</span><kbd data-shortcut="open">⌘ O</kbd>
+          </button>
+          <button class="menu-command" type="button" role="menuitem" data-menu-command="export" disabled>
+            <span class="menu-command-icon" aria-hidden="true">↓</span><span class="menu-command-label">Export PDF…</span><kbd data-shortcut="export">⌘ E</kbd>
+          </button>
+        </div>
       </div>
-    </header>
+      <div class="app-menu-group">
+        <button class="app-menu-trigger" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="edit-menu">Edit</button>
+        <div class="app-menu-popover" id="edit-menu" role="menu" aria-label="Edit" hidden>
+          <div class="menu-section-label">ADJUSTMENTS</div>
+          <button class="menu-command" type="button" role="menuitem" data-menu-command="undo" disabled>
+            <span class="menu-command-icon" aria-hidden="true">↶</span><span class="menu-command-label">Undo</span><kbd data-shortcut="undo">⌘ Z</kbd>
+          </button>
+          <button class="menu-command" type="button" role="menuitem" data-menu-command="redo" disabled>
+            <span class="menu-command-icon" aria-hidden="true">↷</span><span class="menu-command-label">Redo</span><kbd data-shortcut="redo">⇧ ⌘ Z</kbd>
+          </button>
+          <div class="menu-separator" role="separator"></div>
+          <button class="menu-command" type="button" role="menuitem" data-menu-command="reset" disabled>
+            <span class="menu-command-icon" aria-hidden="true">⟲</span><span class="menu-command-label">Reset adjustments</span>
+          </button>
+        </div>
+      </div>
+      <div class="app-menu-group">
+        <button class="app-menu-trigger" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="view-menu">View</button>
+        <div class="app-menu-popover" id="view-menu" role="menu" aria-label="View" hidden>
+          <div class="menu-section-label">APPEARANCE</div>
+          <button class="menu-command" type="button" role="menuitem" data-menu-command="theme">
+            <span class="menu-command-icon" aria-hidden="true">◐</span><span class="menu-command-label" id="menu-theme-label">Switch to dark theme</span>
+          </button>
+        </div>
+      </div>
+      <div class="app-menu-group">
+        <button class="app-menu-trigger" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="help-menu">Help</button>
+        <div class="app-menu-popover" id="help-menu" role="menu" aria-label="Help" hidden>
+          <div class="menu-section-label">SUPPORT</div>
+          <button class="menu-command" type="button" role="menuitem" data-menu-command="shortcuts">
+            <span class="menu-command-icon" aria-hidden="true">⌘</span><span class="menu-command-label">Keyboard shortcuts</span><span class="menu-command-arrow">›</span>
+          </button>
+        </div>
+      </div>
+    </nav>
+    <div class="app-menu-status"><span class="menu-status-dot"></span>Local workspace</div>
+  </header>
 
+  <dialog class="shortcuts-dialog" id="shortcuts-dialog" aria-labelledby="shortcuts-title">
+    <div class="dialog-heading">
+      <div><div class="dialog-eyebrow">PDF STUDIO</div><h2 id="shortcuts-title">Keyboard shortcuts</h2></div>
+      <button class="dialog-close" type="button" aria-label="Close keyboard shortcuts">×</button>
+    </div>
+    <div class="shortcut-list">
+      <div class="shortcut-row"><span>Open an HTML file</span><kbd data-shortcut="open">⌘ O</kbd></div>
+      <div class="shortcut-row"><span>Export as PDF</span><kbd data-shortcut="export">⌘ E</kbd></div>
+      <div class="shortcut-row"><span>Undo adjustment</span><kbd data-shortcut="undo">⌘ Z</kbd></div>
+      <div class="shortcut-row"><span>Redo adjustment</span><kbd data-shortcut="redo">⇧ ⌘ Z</kbd></div>
+      <div class="shortcut-row"><span>Redo adjustment</span><kbd data-shortcut="redoAlternate">⌘ Y</kbd></div>
+    </div>
+    <p class="dialog-note" id="shortcut-platform-note">On Windows and Linux, use Ctrl instead of ⌘.</p>
+  </dialog>
+
+  <aside class="sidebar">
     <section class="panel source-panel">
       <div class="panel-title-row">
         <h2>HTML file</h2>

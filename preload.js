@@ -1,6 +1,7 @@
 const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 contextBridge.exposeInMainWorld('studioApi', {
+  platform: process.platform,
   openFile: () => ipcRenderer.invoke('studio:open-file'),
   loadPath: (filePath) => ipcRenderer.invoke('studio:load-path', filePath),
   updateSettings: (settings) => ipcRenderer.invoke('studio:update-settings', settings),
@@ -10,6 +11,7 @@ contextBridge.exposeInMainWorld('studioApi', {
   resetSettings: () => ipcRenderer.invoke('studio:reset-settings'),
   openOutputFolder: (filePath) => ipcRenderer.invoke('studio:open-output-folder', filePath),
   setPreviewTheme: (theme) => ipcRenderer.invoke('studio:set-preview-theme', theme),
+  controlWindow: (action) => ipcRenderer.invoke('studio:window-control', action),
   onStatus: (listener) => {
     const handler = (_event, payload) => listener(payload);
     ipcRenderer.on('studio:status', handler);

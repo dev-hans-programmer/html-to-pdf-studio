@@ -29,7 +29,15 @@ const elements = {
   adjustmentValidation: $('#adjustment-validation'),
   pageValidation: $('#page-validation'),
   undo: $('#undo-button'),
-  redo: $('#redo-button')
+  redo: $('#redo-button'),
+  menuExport: $('[data-menu-command="export"]'),
+  menuUndo: $('[data-menu-command="undo"]'),
+  menuRedo: $('[data-menu-command="redo"]'),
+  menuReset: $('[data-menu-command="reset"]'),
+  menuThemeLabel: $('#menu-theme-label'),
+  shortcutsDialog: $('#shortcuts-dialog'),
+  windowControls: $('#window-controls'),
+  fullscreenControl: $('#fullscreen-control')
 };
 
 const ruleFields = {
@@ -69,6 +77,23 @@ let committedSettings = null;
 let undoStack = [];
 let redoStack = [];
 const HISTORY_LIMIT = 60;
+const isMacPlatform = window.studioApi.platform === 'darwin';
+
+if (isMacPlatform) elements.windowControls.hidden = false;
+document.querySelectorAll('[data-window-action]').forEach((button) => {
+  button.addEventListener('click', () => {
+    window.studioApi.controlWindow(button.dataset.windowAction).catch((error) => {
+      setStatus(error.message || 'Could not control the window.', 'error');
+    });
+  });
+});
+
+function setFullscreenControl(fullScreen) {
+  const label = fullScreen ? 'Exit full screen' : 'Enter full screen';
+  elements.fullscreenControl.title = label;
+  elements.fullscreenControl.setAttribute('aria-label', label);
+  elements.fullscreenControl.dataset.fullscreen = String(fullScreen);
+}
 
 function setStatus(message, kind = '') {
   elements.status.textContent = message;
@@ -82,12 +107,21 @@ function setBusy(busy) {
   elements.browse.disabled = busy;
   elements.load.disabled = busy;
   elements.export.disabled = busy || !currentFile;
+  updateMenuAvailability();
   elements.previewState.classList.toggle('is-busy', busy);
 }
 
 function renderHistoryButtons() {
   elements.undo.disabled = undoStack.length === 0 || !currentFile;
   elements.redo.disabled = redoStack.length === 0 || !currentFile;
+  updateMenuAvailability();
+}
+
+function updateMenuAvailability() {
+  elements.menuExport.disabled = !currentFile || updateInProgress;
+  elements.menuUndo.disabled = undoStack.length === 0 || !currentFile;
+  elements.menuRedo.disabled = redoStack.length === 0 || !currentFile;
+  elements.menuReset.disabled = !currentFile;
 }
 
 function showValidation(element, message, kind = 'empty') {
@@ -190,11 +224,118 @@ function setTheme(theme) {
   document.documentElement.dataset.theme = selected;
   const nextTheme = selected === 'dark' ? 'light' : 'dark';
   elements.themeToggleLabel.textContent = selected === 'dark' ? 'Light theme' : 'Dark theme';
+  elements.menuThemeLabel.textContent = selected === 'dark' ? 'Switch to light theme' : 'Switch to dark theme';
   elements.themeToggle.setAttribute('aria-label', `Switch to ${nextTheme} theme`);
   elements.themeToggle.title = `Switch to ${nextTheme} theme`;
   try { localStorage.setItem('html-pdf-studio-theme', selected); } catch {}
   window.studioApi.setPreviewTheme(selected).catch(() => {});
 }
+
+const menuGroups = [...document.querySelectorAll('.app-menu-group')];
+let openMenuGroup = null;
+
+function closeMenus({ restoreFocus = false } = {}) {
+  if (!openMenuGroup) return;
+  const group = openMenuGroup;
+  group.querySelector('.app-menu-trigger').setAttribute('aria-expanded', 'false');
+  group.querySelector('.app-menu-popover').hidden = true;
+  openMenuGroup = null;
+  if (restoreFocus) group.querySelector('.app-menu-trigger').focus();
+}
+
+function openMenu(group, { focusFirst = false } = {}) {
+  closeMenus();
+  const trigger = group.querySelector('.app-menu-trigger');
+  const popover = group.querySelector('.app-menu-popover');
+  popover.hidden = false;
+  const width = popover.getBoundingClientRect().width;
+  const triggerLeft = trigger.getBoundingClientRect().left;
+  const sidebarEdge = Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sidebar-width')) || 390;
+  const left = Math.max(8, Math.min(triggerLeft, sidebarEdge - width - 8));
+  popover.style.left = `${left}px`;
+  trigger.setAttribute('aria-expanded', 'true');
+  openMenuGroup = group;
+  if (focusFirst) popover.querySelector('[role="menuitem"]:not(:disabled)')?.focus();
+}
+
+function cycleMenuFocus(popover, direction) {
+  const items = [...popover.querySelectorAll('[role="menuitem"]:not(:disabled)')];
+  if (!items.length) return;
+  const index = items.indexOf(document.activeElement);
+  const nextIndex = index < 0 ? 0 : (index + direction + items.length) % items.length;
+  items[nextIndex].focus();
+}
+
+function runMenuCommand(command) {
+  closeMenus({ restoreFocus: true });
+  if (command === 'open') openFilePicker();
+  else if (command === 'export') exportPdf();
+  else if (command === 'undo') undoSettings();
+  else if (command === 'redo') redoSettings();
+  else if (command === 'reset') elements.reset.click();
+  else if (command === 'theme') setTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
+  else if (command === 'shortcuts') elements.shortcutsDialog.showModal();
+}
+
+menuGroups.forEach((group, index) => {
+  const trigger = group.querySelector('.app-menu-trigger');
+  const popover = group.querySelector('.app-menu-popover');
+  trigger.addEventListener('click', () => {
+    if (openMenuGroup === group) closeMenus();
+    else openMenu(group);
+  });
+  trigger.addEventListener('keydown', (event) => {
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      openMenu(group, { focusFirst: true });
+    } else if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') {
+      event.preventDefault();
+      const offset = event.key === 'ArrowRight' ? 1 : -1;
+      menuGroups[(index + offset + menuGroups.length) % menuGroups.length].querySelector('.app-menu-trigger').focus();
+    }
+  });
+  popover.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closeMenus({ restoreFocus: true });
+    } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      cycleMenuFocus(popover, event.key === 'ArrowDown' ? 1 : -1);
+    }
+  });
+  popover.querySelectorAll('[data-menu-command]').forEach((item) => {
+    item.addEventListener('click', () => runMenuCommand(item.dataset.menuCommand));
+  });
+});
+
+window.addEventListener('pointerdown', (event) => {
+  if (!event.target.closest('.app-menu-bar')) closeMenus();
+});
+window.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && openMenuGroup) {
+    event.preventDefault();
+    closeMenus({ restoreFocus: true });
+  }
+});
+
+const shortcutModifier = isMacPlatform ? '⌘' : 'Ctrl';
+const shortcutLabels = {
+  open: `${shortcutModifier} O`,
+  export: `${shortcutModifier} E`,
+  undo: `${shortcutModifier} Z`,
+  redo: isMacPlatform ? '⇧ ⌘ Z' : 'Ctrl Shift Z',
+  redoAlternate: `${shortcutModifier} Y`
+};
+document.querySelectorAll('[data-shortcut]').forEach((key) => {
+  key.textContent = shortcutLabels[key.dataset.shortcut];
+});
+const shortcutPlatformNote = $('#shortcut-platform-note');
+if (isMacPlatform) shortcutPlatformNote.classList.add('is-hidden');
+else shortcutPlatformNote.textContent = 'On macOS, use ⌘ instead of Ctrl.';
+$('.dialog-close').addEventListener('click', () => elements.shortcutsDialog.close());
+elements.shortcutsDialog.addEventListener('click', (event) => {
+  if (event.target === elements.shortcutsDialog) elements.shortcutsDialog.close();
+});
 
 function colorToHex(value) {
   if (!value || !CSS.supports('color', value)) return null;
@@ -701,7 +842,16 @@ catch { setTheme('light'); }
 setPreviewDocument();
 
 window.studioApi.onStatus((event) => {
+  if (event.type === 'window-fullscreen') {
+    setFullscreenControl(Boolean(event.fullScreen));
+    return;
+  }
+  if (event.type === 'dismiss-app-menu') {
+    closeMenus();
+    return;
+  }
   if (event.type === 'shortcut') {
+    closeMenus();
     if (event.action === 'open') openFilePicker();
     else if (event.action === 'export') exportPdf();
     else if (event.action === 'undo') undoSettings();
@@ -711,6 +861,7 @@ window.studioApi.onStatus((event) => {
   if (event.type === 'rendering') {
     updateInProgress = true;
     elements.export.disabled = true;
+    updateMenuAvailability();
     elements.previewState.classList.add('is-busy');
     setStatus('Rendering PDF preview...');
     elements.previewStateLabel.textContent = 'Updating preview';
@@ -720,6 +871,7 @@ window.studioApi.onStatus((event) => {
     elements.previewStateLabel.textContent = 'Preview ready';
     elements.export.disabled = false;
     updateInProgress = false;
+    updateMenuAvailability();
     elements.previewState.classList.remove('is-busy');
   }
   if (event.type === 'document-loaded') {
@@ -740,6 +892,7 @@ window.studioApi.onStatus((event) => {
     setStatus(event.message || 'Something went wrong while creating the preview.', 'error');
     elements.previewStateLabel.textContent = 'Preview issue';
     updateInProgress = false;
+    updateMenuAvailability();
     elements.previewState.classList.remove('is-busy');
   }
 });

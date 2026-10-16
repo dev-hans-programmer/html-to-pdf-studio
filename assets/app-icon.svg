@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="tile" x1="174" y1="76" x2="856" y2="972" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#5793ee"/>
+      <stop offset=".48" stop-color="#3470c7"/>
+      <stop offset="1" stop-color="#234b91"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0" cy="0" r="1" gradientTransform="matrix(700 0 0 610 370 96)" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#fff" stop-opacity=".22"/>
+      <stop offset="1" stop-color="#fff" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="paper" x1="344" y1="163" x2="712" y2="868" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#fff"/>
+      <stop offset="1" stop-color="#edf4ff"/>
+    </linearGradient>
+    <linearGradient id="fold" x1="581" y1="154" x2="748" y2="322" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#e5efff"/>
+      <stop offset="1" stop-color="#c9dcfa"/>
+    </linearGradient>
+    <filter id="shadow" x="240" y="110" width="606" height="824" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse">
+      <feFlood flood-opacity="0" result="background"/>
+      <feColorMatrix in="SourceAlpha" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0"/>
+      <feOffset dy="22"/>
+      <feGaussianBlur stdDeviation="24"/>
+      <feComposite in2="SourceAlpha" operator="out"/>
+      <feColorMatrix values="0 0 0 0 0.035 0 0 0 0 0.12 0 0 0 0 0.28 0 0 0 .38 0"/>
+      <feBlend in2="background" result="shadow"/>
+      <feBlend in="SourceGraphic" in2="shadow" result="shape"/>
+    </filter>
+    <clipPath id="clip">
+      <rect x="28" y="28" width="968" height="968" rx="226"/>
+    </clipPath>
+  </defs>
+  <g clip-path="url(#clip)">
+    <rect x="28" y="28" width="968" height="968" rx="226" fill="url(#tile)"/>
+    <rect x="28" y="28" width="968" height="968" rx="226" fill="url(#glow)"/>
+    <path d="M64 776c166 115 354 171 566 171 132 0 255-25 369-74v123H64V776Z" fill="#173c7c" fill-opacity=".16"/>
+    <g filter="url(#shadow)">
+      <path d="M354 154h226l168 168v500c0 25-20 45-45 45H354c-25 0-45-20-45-45V199c0-25 20-45 45-45Z" fill="url(#paper)"/>
+      <path d="M580 154v125c0 24 19 43 43 43h125L580 154Z" fill="url(#fold)"/>
+      <path d="M580 154v125c0 24 19 43 43 43h125" fill="none" stroke="#b8cff3" stroke-linecap="round" stroke-linejoin="round" stroke-width="10"/>
+      <text x="376" y="493" fill="#2e66b2" font-family="-apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="124" font-weight="800" letter-spacing="-8">PDF</text>
+      <rect x="378" y="552" width="294" height="19" rx="9.5" fill="#b6c9e8"/>
+      <rect x="378" y="601" width="244" height="19" rx="9.5" fill="#c8d7ee"/>
+      <rect x="378" y="650" width="274" height="19" rx="9.5" fill="#c8d7ee"/>
+      <rect x="378" y="699" width="198" height="19" rx="9.5" fill="#c8d7ee"/>
+    </g>
+    <path d="M93 208c75-90 187-145 312-154" fill="none" stroke="#fff" stroke-linecap="round" stroke-opacity=".12" stroke-width="14"/>
+  </g>
+</svg>

@@ -1,4 +1,4 @@
-const { app, BrowserWindow, WebContentsView, dialog, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, WebContentsView, dialog, ipcMain, shell, Menu } = require('electron');
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const crypto = require('node:crypto');
@@ -6,6 +6,7 @@ const { pathToFileURL, fileURLToPath } = require('node:url');
 
 const APP_NAME = 'HTML to PDF Studio';
 const SIDEBAR_WIDTH = 390;
+const APP_MENU_HEIGHT = 44;
 const PREVIEW_TOOLBAR_HEIGHT = 58;
 const APP_ROOT = __dirname;
 const RENDERER_FILE = path.join(APP_ROOT, 'renderer', 'index.html');
@@ -32,6 +33,7 @@ let previewSequence = 0;
 let previewQueue = Promise.resolve();
 
 app.setName(APP_NAME);
+Menu.setApplicationMenu(null);
 
 function sendStatus(type, details = {}) {
   if (mainWindow && !mainWindow.isDestroyed()) {
@@ -45,6 +47,23 @@ function installKeyboardShortcuts(webContents, { captureHistory = false } = {}) 
     const modifier = input.meta || input.control;
     if (!modifier || input.alt) return;
     const key = input.key.toLowerCase();
+    if (process.platform === 'darwin') {
+      if (key === 'q' && !input.shift) {
+        event.preventDefault();
+        app.quit();
+        return;
+      }
+      if (key === 'w' && !input.shift) {
+        event.preventDefault();
+        mainWindow?.close();
+        return;
+      }
+      if (key === 'm' && !input.shift) {
+        event.preventDefault();
+        mainWindow?.minimize();
+        return;
+      }
+    }
     let action = '';
     if (key === 'o' && !input.shift) action = 'open';
     else if (key === 'e' && !input.shift) action = 'export';
@@ -252,9 +271,9 @@ function layoutPreview() {
   const [width, height] = mainWindow.getContentSize();
   previewView.setBounds({
     x: SIDEBAR_WIDTH,
-    y: PREVIEW_TOOLBAR_HEIGHT,
+    y: APP_MENU_HEIGHT + PREVIEW_TOOLBAR_HEIGHT,
     width: Math.max(100, width - SIDEBAR_WIDTH),
-    height: Math.max(100, height - PREVIEW_TOOLBAR_HEIGHT)
+    height: Math.max(100, height - APP_MENU_HEIGHT - PREVIEW_TOOLBAR_HEIGHT)
   });
 }
 
@@ -265,6 +284,10 @@ function addPreviewView() {
     });
     previewView.setBackgroundColor(previewTheme === 'dark' ? '#10151e' : '#e9edf3');
     installKeyboardShortcuts(previewView.webContents, { captureHistory: true });
+    previewView.webContents.on('focus', () => sendStatus('dismiss-app-menu'));
+    previewView.webContents.on('before-mouse-event', (_event, mouse) => {
+      if (mouse.type === 'mouseDown') sendStatus('dismiss-app-menu');
+    });
     previewView.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
     previewView.webContents.on('will-navigate', (event, url) => {
       if (!url.startsWith('file:')) event.preventDefault();
@@ -441,6 +464,15 @@ function registerIpc() {
     if (!previewView || previewView.webContents.isDestroyed()) return;
     previewView.setBackgroundColor(previewTheme === 'dark' ? '#10151e' : '#e9edf3');
   });
+  ipcMain.handle('studio:window-control', (event, action) => {
+    const window = BrowserWindow.fromWebContents(event.sender);
+    if (!window || window !== mainWindow || window.isDestroyed()) return { ok: false };
+    if (action === 'close') window.close();
+    else if (action === 'minimize') window.minimize();
+    else if (action === 'fullscreen') window.setFullScreen(!window.isFullScreen());
+    else return { ok: false };
+    return { ok: true };
+  });
   ipcMain.handle('studio:open-output-folder', async (_event, filePath) => {
     if (filePath) await shell.showItemInFolder(filePath);
   });
@@ -453,6 +485,8 @@ async function createMainWindow() {
     minWidth: 1040,
     minHeight: 700,
     title: APP_NAME,
+    frame: process.platform !== 'darwin',
+    roundedCorners: true,
     backgroundColor: '#edf1f6',
     webPreferences: {
       preload: path.join(APP_ROOT, 'preload.js'),
@@ -463,6 +497,9 @@ async function createMainWindow() {
   });
   await mainWindow.loadFile(RENDERER_FILE);
   mainWindow.on('resize', layoutPreview);
+  mainWindow.on('enter-full-screen', () => sendStatus('window-fullscreen', { fullScreen: true }));
+  mainWindow.on('leave-full-screen', () => sendStatus('window-fullscreen', { fullScreen: false }));
+  mainWindow.webContents.on('blur', () => sendStatus('dismiss-app-menu'));
   mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   installKeyboardShortcuts(mainWindow.webContents);
   mainWindow.webContents.on('will-navigate', (event, url) => {
