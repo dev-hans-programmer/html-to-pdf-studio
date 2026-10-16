@@ -228,7 +228,6 @@ function setTheme(theme) {
   elements.themeToggle.setAttribute('aria-label', `Switch to ${nextTheme} theme`);
   elements.themeToggle.title = `Switch to ${nextTheme} theme`;
   try { localStorage.setItem('html-pdf-studio-theme', selected); } catch {}
-  window.studioApi.setPreviewTheme(selected).catch(() => {});
 }
 
 const menuGroups = [...document.querySelectorAll('.app-menu-group')];
@@ -322,6 +321,7 @@ const shortcutModifier = isMacPlatform ? '⌘' : 'Ctrl';
 const shortcutLabels = {
   open: `${shortcutModifier} O`,
   export: `${shortcutModifier} E`,
+  find: `${shortcutModifier} F`,
   undo: `${shortcutModifier} Z`,
   redo: isMacPlatform ? '⇧ ⌘ Z' : 'Ctrl Shift Z',
   redoAlternate: `${shortcutModifier} Y`
@@ -854,6 +854,7 @@ window.studioApi.onStatus((event) => {
     closeMenus();
     if (event.action === 'open') openFilePicker();
     else if (event.action === 'export') exportPdf();
+    else if (event.action === 'find') window.dispatchEvent(new Event('pdf-viewer:find'));
     else if (event.action === 'undo') undoSettings();
     else if (event.action === 'redo') redoSettings();
     return;

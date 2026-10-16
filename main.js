@@ -1,13 +1,10 @@
-const { app, BrowserWindow, WebContentsView, dialog, ipcMain, shell, Menu } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain, shell, Menu } = require('electron');
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { pathToFileURL, fileURLToPath } = require('node:url');
 
 const APP_NAME = 'HTML to PDF Studio';
-const SIDEBAR_WIDTH = 390;
-const APP_MENU_HEIGHT = 44;
-const PREVIEW_TOOLBAR_HEIGHT = 58;
 const APP_ROOT = __dirname;
 const RENDERER_FILE = path.join(APP_ROOT, 'renderer', 'index.html');
 const DEFAULTS = {
@@ -21,9 +18,7 @@ const DEFAULTS = {
 };
 
 let mainWindow;
-let previewView;
 let renderWindow;
-let previewTheme = 'light';
 let currentFile = '';
 let currentSettings = structuredClone(DEFAULTS);
 let lastOutputDirectory = '';
@@ -41,7 +36,7 @@ function sendStatus(type, details = {}) {
   }
 }
 
-function installKeyboardShortcuts(webContents, { captureHistory = false } = {}) {
+function installKeyboardShortcuts(webContents) {
   webContents.on('before-input-event', (event, input) => {
     if (input.type !== 'keyDown') return;
     const modifier = input.meta || input.control;
@@ -67,8 +62,7 @@ function installKeyboardShortcuts(webContents, { captureHistory = false } = {}) 
     let action = '';
     if (key === 'o' && !input.shift) action = 'open';
     else if (key === 'e' && !input.shift) action = 'export';
-    else if (captureHistory && key === 'z') action = input.shift ? 'redo' : 'undo';
-    else if (captureHistory && key === 'y') action = 'redo';
+    else if (key === 'f' && !input.shift) action = 'find';
     if (!action) return;
     event.preventDefault();
     sendStatus('shortcut', { action });
@@ -266,39 +260,6 @@ async function makePdfBuffer() {
   });
 }
 
-function layoutPreview() {
-  if (!mainWindow || mainWindow.isDestroyed() || !previewView) return;
-  const [width, height] = mainWindow.getContentSize();
-  previewView.setBounds({
-    x: SIDEBAR_WIDTH,
-    y: APP_MENU_HEIGHT + PREVIEW_TOOLBAR_HEIGHT,
-    width: Math.max(100, width - SIDEBAR_WIDTH),
-    height: Math.max(100, height - APP_MENU_HEIGHT - PREVIEW_TOOLBAR_HEIGHT)
-  });
-}
-
-function addPreviewView() {
-  if (!previewView) {
-    previewView = new WebContentsView({
-      webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, webSecurity: true }
-    });
-    previewView.setBackgroundColor(previewTheme === 'dark' ? '#10151e' : '#e9edf3');
-    installKeyboardShortcuts(previewView.webContents, { captureHistory: true });
-    previewView.webContents.on('focus', () => sendStatus('dismiss-app-menu'));
-    previewView.webContents.on('before-mouse-event', (_event, mouse) => {
-      if (mouse.type === 'mouseDown') sendStatus('dismiss-app-menu');
-    });
-    previewView.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
-    previewView.webContents.on('will-navigate', (event, url) => {
-      if (!url.startsWith('file:')) event.preventDefault();
-    });
-  }
-  if (mainWindow && !mainWindow.contentView.children.includes(previewView)) {
-    mainWindow.contentView.addChildView(previewView);
-  }
-  layoutPreview();
-}
-
 async function removeOldPreview(oldPath) {
   if (!oldPath || oldPath === lastPreviewPath) return;
   try { await fs.unlink(oldPath); } catch {}
@@ -314,8 +275,6 @@ async function renderPreview() {
   const outputPath = path.join(previewDirectory, `preview-${Date.now()}-${++previewSequence}.pdf`);
   await fs.writeFile(outputPath, output);
   lastPreviewPath = outputPath;
-  addPreviewView();
-  await previewView.webContents.loadURL(pathToFileURL(outputPath).toString());
   await removeOldPreview(oldPath);
   sendStatus('preview-ready', { filePath: currentFile, size: output.length });
 }
@@ -459,10 +418,11 @@ function registerIpc() {
     await schedulePreview();
     return currentSettings;
   });
-  ipcMain.handle('studio:set-preview-theme', (_event, theme) => {
-    previewTheme = theme === 'dark' ? 'dark' : 'light';
-    if (!previewView || previewView.webContents.isDestroyed()) return;
-    previewView.setBackgroundColor(previewTheme === 'dark' ? '#10151e' : '#e9edf3');
+  ipcMain.handle('studio:read-preview', async (event) => {
+    if (BrowserWindow.fromWebContents(event.sender) !== mainWindow) throw new Error('Only the app window can access the PDF preview.');
+    if (!lastPreviewPath) throw new Error('The PDF preview is not ready yet.');
+    const bytes = await fs.readFile(lastPreviewPath);
+    return new Uint8Array(bytes);
   });
   ipcMain.handle('studio:window-control', (event, action) => {
     const window = BrowserWindow.fromWebContents(event.sender);
@@ -496,7 +456,6 @@ async function createMainWindow() {
     }
   });
   await mainWindow.loadFile(RENDERER_FILE);
-  mainWindow.on('resize', layoutPreview);
   mainWindow.on('enter-full-screen', () => sendStatus('window-fullscreen', { fullScreen: true }));
   mainWindow.on('leave-full-screen', () => sendStatus('window-fullscreen', { fullScreen: false }));
   mainWindow.webContents.on('blur', () => sendStatus('dismiss-app-menu'));

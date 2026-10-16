@@ -17,7 +17,9 @@
     "appId": "com.hasanali.htmltopdfstudio",
     "productName": "HTML to PDF Studio",
     "asar": true,
-    "directories": { "output": "release" },
+    "directories": {
+      "output": "release"
+    },
     "files": [
       "main.js",
       "preload.js",
@@ -26,10 +28,15 @@
       "README.md"
     ],
     "mac": {
-      "target": ["dir"],
+      "target": [
+        "dir"
+      ],
       "icon": "assets/app-icon.icns",
       "category": "public.app-category.productivity",
       "identity": null
     }
+  },
+  "dependencies": {
+    "pdfjs-dist": "6.4.299"
   }
 }

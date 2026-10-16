@@ -25,6 +25,7 @@ Choose an HTML file with **Browse**, paste a path and press **Load**, or drag an
 - Adjustment cards summarize active spacing, typography, color, and page-break rules. Invalid values and selectors are highlighted inline.
 - Undo and redo section/page edits with `Cmd/Ctrl+Z` and `Cmd/Ctrl+Shift+Z` (`Cmd/Ctrl+Y` also redoes). Open a file with `Cmd/Ctrl+O` and export with `Cmd/Ctrl+E`.
 - PDF export suggests a filename based on the HTML file, remembers the last output folder, and confirms before replacing an existing PDF.
+- The branded PDF viewer includes page navigation, zoom and fit-width controls, on-demand thumbnails, selectable text, and highlighted document search.
 - Use the custom File, Edit, View, and Help menus for document actions, adjustment history, themes, and a shortcut reference.
 - On macOS, use the custom window controls in the app bar to close, minimize, or enter full screen.
 - The macOS app bundle uses the custom PDF Studio document icon.
@@ -58,7 +59,7 @@ npm run package:mac
 ## Technology
 
 - Electron provides the desktop window, native file dialogs, and Chromium rendering.
-- The app previews the generated PDF itself, so the preview shows the same page breaks and layout that will be exported.
+- PDF.js renders the generated PDF locally with the same page breaks and layout that will be exported.
 - All conversion runs locally on the Mac. The selected HTML and generated PDF are not uploaded.
 
 The desktop UI uses Electron's bundled Chromium; it does not depend on the separate Google Chrome installation. The `.command` launcher starts the local app from this folder.

@@ -16,7 +16,7 @@ Medium
 - Layout diagnostics: flag content near page edges, awkward page breaks, oversized sections, blank pages, and missing assets.
 - Before-and-after comparison to see the effect of an adjustment.
 - Reusable profiles: save named settings such as “Resume,” “Invoice,” or “Report,” then apply them to another HTML file.
-- Custom PDF viewer: use a branded toolbar, page controls, zoom, thumbnails, and search so the preview looks consistent with the rest of the app.
+- Custom PDF viewer (implemented): branded toolbar, page controls, zoom, thumbnails, selectable text, and highlighted search.
 - Batch conversion: select several HTML files and export them together.
 - Asset checks: report missing images, stylesheets, or fonts before export.
 - Per-page controls: set page breaks, page-specific margins, headers, and footers.

@@ -76,6 +76,7 @@
     <div class="shortcut-list">
       <div class="shortcut-row"><span>Open an HTML file</span><kbd data-shortcut="open">⌘ O</kbd></div>
       <div class="shortcut-row"><span>Export as PDF</span><kbd data-shortcut="export">⌘ E</kbd></div>
+      <div class="shortcut-row"><span>Find in PDF</span><kbd data-shortcut="find">⌘ F</kbd></div>
       <div class="shortcut-row"><span>Undo adjustment</span><kbd data-shortcut="undo">⌘ Z</kbd></div>
       <div class="shortcut-row"><span>Redo adjustment</span><kbd data-shortcut="redo">⇧ ⌘ Z</kbd></div>
       <div class="shortcut-row"><span>Redo adjustment</span><kbd data-shortcut="redoAlternate">⌘ Y</kbd></div>
@@ -214,22 +215,64 @@
         </div>
       </div>
     </header>
-    <div class="preview-empty" id="preview-empty">
-      <div class="preview-empty-card">
-        <div class="preview-empty-icon" aria-hidden="true">
-          <svg viewBox="0 0 48 48"><path d="M13 5.5h15l8 8v29H13z"/><path d="M28 5.5v9h8M19 23h11M19 29h11M19 35h8"/></svg>
+    <div class="pdf-viewer-toolbar" role="toolbar" aria-label="PDF viewer controls">
+      <button class="viewer-button" id="thumbnails-toggle" type="button" aria-label="Show page thumbnails" aria-pressed="false" title="Show page thumbnails (T)" disabled>
+        <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2.8" y="3" width="5.2" height="6.4" rx=".7"/><rect x="12" y="3" width="5.2" height="6.4" rx=".7"/><rect x="2.8" y="11" width="5.2" height="6" rx=".7"/><rect x="12" y="11" width="5.2" height="6" rx=".7"/></svg>
+      </button>
+      <span class="viewer-separator"></span>
+      <div class="viewer-control-group" role="group" aria-label="Page navigation">
+        <button class="viewer-button" id="page-prev" type="button" aria-label="Previous page" title="Previous page (Page Up)" disabled><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5.5 12.5 4.5-5 4.5 5"/></svg></button>
+        <label class="page-number-control"><input id="pdf-page-number" type="number" min="1" value="1" aria-label="Current page" disabled><span>/</span><span id="pdf-page-total">—</span></label>
+        <button class="viewer-button" id="page-next" type="button" aria-label="Next page" title="Next page (Page Down)" disabled><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5.5 7.5 4.5 5 4.5-5"/></svg></button>
+      </div>
+      <span class="viewer-separator"></span>
+      <div class="viewer-control-group" role="group" aria-label="Zoom controls">
+        <button class="viewer-button" id="zoom-out" type="button" aria-label="Zoom out" title="Zoom out (−)" disabled><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4.5 10h11"/></svg></button>
+        <button class="zoom-level" id="zoom-level" type="button" title="Reset zoom to 100%" disabled>100%</button>
+        <button class="viewer-button" id="zoom-in" type="button" aria-label="Zoom in" title="Zoom in (+)" disabled><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 4.5v11M4.5 10h11"/></svg></button>
+      </div>
+      <button class="fit-button" id="fit-width" type="button" title="Fit page width" disabled><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 4.5h14v11H3zM6 7.5h8M6 10h8M6 12.5h5"/></svg><span>Fit width</span></button>
+      <div class="viewer-toolbar-spacer"></div>
+      <div class="pdf-search-box" role="search" aria-label="Find text in PDF">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.7" cy="8.7" r="5.4"/><path d="m12.8 12.8 4 4"/></svg>
+        <input id="pdf-search-input" type="search" placeholder="Find in PDF" aria-label="Find in PDF" disabled>
+        <span id="pdf-search-count" class="search-count" aria-live="polite"></span>
+        <button class="search-step" id="search-prev" type="button" aria-label="Previous search result" title="Previous result (Shift+Enter)" disabled><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5.5 12.5 4.5-5 4.5 5"/></svg></button>
+        <button class="search-step" id="search-next" type="button" aria-label="Next search result" title="Next result (Enter)" disabled><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5.5 7.5 4.5 5 4.5-5"/></svg></button>
+      </div>
+    </div>
+    <div class="pdf-viewer-content" id="pdf-viewer-content">
+      <aside class="thumbnail-sidebar" id="thumbnail-sidebar" aria-label="Page thumbnails" hidden>
+        <div class="thumbnail-heading"><span>Pages</span><span id="thumbnail-page-count">0</span></div>
+        <div class="thumbnail-list" id="thumbnail-list"></div>
+      </aside>
+      <div class="pdf-page-scroll" id="pdf-page-scroll" tabindex="0" aria-label="PDF document preview">
+        <div class="pdf-pages" id="pdf-pages"></div>
+      </div>
+      <div class="preview-empty" id="preview-empty">
+        <div class="preview-empty-card">
+          <div class="preview-empty-icon" aria-hidden="true">
+            <svg viewBox="0 0 48 48"><path d="M13 5.5h15l8 8v29H13z"/><path d="M28 5.5v9h8M19 23h11M19 29h11M19 35h8"/></svg>
+          </div>
+          <span class="eyebrow">YOUR DOCUMENT WORKSPACE</span>
+          <h2>Bring your HTML in</h2>
+          <p>Choose a file to create a live PDF preview. Tune section spacing, typography, and color, then export when it looks right.</p>
+          <button class="button button-primary empty-browse-button" id="empty-browse-button" type="button">
+            <svg class="icon" viewBox="0 0 20 20" aria-hidden="true"><path d="M3.5 6.5h5l1.4 1.7h6.6v7.3h-13z"/><path d="M3.5 6.5V4.8h5l1.4 1.7"/></svg>Choose HTML file
+          </button>
+          <div class="empty-hints"><span>HTML / HTM</span><span>Local and private</span><span>Live preview</span></div>
         </div>
-        <span class="eyebrow">YOUR DOCUMENT WORKSPACE</span>
-        <h2>Bring your HTML in</h2>
-        <p>Choose a file to create a live PDF preview. Tune section spacing, typography, and color, then export when it looks right.</p>
-        <button class="button button-primary empty-browse-button" id="empty-browse-button" type="button">
-          <svg class="icon" viewBox="0 0 20 20" aria-hidden="true"><path d="M3.5 6.5h5l1.4 1.7h6.6v7.3h-13z"/><path d="M3.5 6.5V4.8h5l1.4 1.7"/></svg>Choose HTML file
-        </button>
-        <div class="empty-hints"><span>HTML / HTM</span><span>Local and private</span><span>Live preview</span></div>
+      </div>
+      <div class="pdf-viewer-overlay" id="pdf-loading-overlay" role="status" aria-live="polite" hidden>
+        <div class="pdf-loading-card"><span class="pdf-loading-spinner" aria-hidden="true"></span><span id="pdf-loading-label">Preparing PDF preview…</span></div>
+      </div>
+      <div class="pdf-viewer-overlay" id="pdf-error-overlay" role="alert" hidden>
+        <div class="pdf-error-card" id="pdf-error-message">The PDF preview could not be opened.</div>
       </div>
     </div>
   </main>
 
   <script src="./app.js"></script>
+  <script type="module" src="./pdf-viewer.js"></script>
 </body>
 </html>

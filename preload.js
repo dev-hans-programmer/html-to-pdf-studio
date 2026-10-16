@@ -8,9 +8,9 @@ contextBridge.exposeInMainWorld('studioApi', {
   validateSelector: (selector) => ipcRenderer.invoke('studio:validate-selector', selector),
   getPathForFile: (file) => webUtils.getPathForFile(file),
   exportPdf: () => ipcRenderer.invoke('studio:export'),
+  readPreview: () => ipcRenderer.invoke('studio:read-preview'),
   resetSettings: () => ipcRenderer.invoke('studio:reset-settings'),
   openOutputFolder: (filePath) => ipcRenderer.invoke('studio:open-output-folder', filePath),
-  setPreviewTheme: (theme) => ipcRenderer.invoke('studio:set-preview-theme', theme),
   controlWindow: (action) => ipcRenderer.invoke('studio:window-control', action),
   onStatus: (listener) => {
     const handler = (_event, payload) => listener(payload);
