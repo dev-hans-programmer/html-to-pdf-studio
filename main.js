@@ -25,6 +25,7 @@ let renderWindow;
 let previewTheme = 'light';
 let currentFile = '';
 let currentSettings = structuredClone(DEFAULTS);
+let lastOutputDirectory = '';
 let sections = [];
 let lastPreviewPath = '';
 let previewSequence = 0;
@@ -36,6 +37,23 @@ function sendStatus(type, details = {}) {
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send('studio:status', { type, ...details });
   }
+}
+
+function installKeyboardShortcuts(webContents, { captureHistory = false } = {}) {
+  webContents.on('before-input-event', (event, input) => {
+    if (input.type !== 'keyDown') return;
+    const modifier = input.meta || input.control;
+    if (!modifier || input.alt) return;
+    const key = input.key.toLowerCase();
+    let action = '';
+    if (key === 'o' && !input.shift) action = 'open';
+    else if (key === 'e' && !input.shift) action = 'export';
+    else if (captureHistory && key === 'z') action = input.shift ? 'redo' : 'undo';
+    else if (captureHistory && key === 'y') action = 'redo';
+    if (!action) return;
+    event.preventDefault();
+    sendStatus('shortcut', { action });
+  });
 }
 
 function settingsFile(filePath) {
@@ -63,6 +81,24 @@ async function persistSettings() {
   const filePath = settingsFile(currentFile);
   await fs.mkdir(path.dirname(filePath), { recursive: true });
   await fs.writeFile(filePath, JSON.stringify(currentSettings, null, 2), 'utf8');
+}
+
+async function loadPreferences() {
+  try {
+    const filePath = path.join(app.getPath('userData'), 'preferences.json');
+    const saved = JSON.parse(await fs.readFile(filePath, 'utf8'));
+    const directory = typeof saved.lastOutputDirectory === 'string' ? saved.lastOutputDirectory : '';
+    const stat = directory ? await fs.stat(directory).catch(() => null) : null;
+    lastOutputDirectory = stat?.isDirectory() ? directory : '';
+  } catch {
+    lastOutputDirectory = '';
+  }
+}
+
+async function persistPreferences() {
+  const filePath = path.join(app.getPath('userData'), 'preferences.json');
+  await fs.mkdir(path.dirname(filePath), { recursive: true });
+  await fs.writeFile(filePath, JSON.stringify({ lastOutputDirectory }, null, 2), 'utf8');
 }
 
 function uniqueSelectorScript() {
@@ -228,6 +264,7 @@ function addPreviewView() {
       webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, webSecurity: true }
     });
     previewView.setBackgroundColor(previewTheme === 'dark' ? '#10151e' : '#e9edf3');
+    installKeyboardShortcuts(previewView.webContents, { captureHistory: true });
     previewView.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
     previewView.webContents.on('will-navigate', (event, url) => {
       if (!url.startsWith('file:')) event.preventDefault();
@@ -317,41 +354,59 @@ async function loadDocument(filePath) {
 
 async function exportPdf() {
   if (!currentFile) throw new Error('Load an HTML file first.');
-  const defaultPath = path.join(path.dirname(currentFile), `${path.basename(currentFile, path.extname(currentFile))}.pdf`);
-  const result = await dialog.showSaveDialog(mainWindow, {
-    title: 'Export PDF',
-    defaultPath,
-    filters: [{ name: 'PDF', extensions: ['pdf'] }]
-  });
-  if (result.canceled || !result.filePath) return { canceled: true };
-  const outputPath = result.filePath.toLowerCase().endsWith('.pdf') ? result.filePath : `${result.filePath}.pdf`;
-  try {
-    await fs.access(outputPath);
-    const response = await dialog.showMessageBox(mainWindow, {
-      type: 'warning',
-      buttons: ['Replace', 'Cancel'],
-      defaultId: 1,
-      cancelId: 1,
-      message: 'A PDF with this name already exists.',
-      detail: path.basename(outputPath)
+  const suggestedName = `${path.basename(currentFile, path.extname(currentFile))}.pdf`;
+  let defaultPath = path.join(lastOutputDirectory || path.dirname(currentFile), suggestedName);
+  while (true) {
+    const result = await dialog.showSaveDialog(mainWindow, {
+      title: `Export ${suggestedName}`,
+      defaultPath,
+      buttonLabel: 'Export PDF',
+      message: 'Choose where to save the generated PDF.',
+      properties: [],
+      filters: [{ name: 'PDF', extensions: ['pdf'] }]
     });
-    if (response.response !== 0) return { canceled: true };
-  } catch {}
-  const pdf = await makePdfBuffer();
-  await fs.writeFile(outputPath, pdf);
-  sendStatus('exported', { outputPath });
-  return { outputPath };
+    if (result.canceled || !result.filePath) return { canceled: true };
+    const outputPath = result.filePath.toLowerCase().endsWith('.pdf') ? result.filePath : `${result.filePath}.pdf`;
+    let exists = false;
+    try { await fs.access(outputPath); exists = true; } catch {}
+    if (exists) {
+      const response = await dialog.showMessageBox(mainWindow, {
+        type: 'warning',
+        title: 'Replace existing PDF?',
+        buttons: ['Replace PDF', 'Choose another…', 'Cancel'],
+        defaultId: 2,
+        cancelId: 2,
+        message: `${path.basename(outputPath)} already exists.`,
+        detail: `${outputPath}\n\nReplace it with a PDF generated from ${path.basename(currentFile)}?`
+      });
+      if (response.response === 1) {
+        defaultPath = outputPath;
+        continue;
+      }
+      if (response.response !== 0) return { canceled: true };
+    }
+    const pdf = await makePdfBuffer();
+    await fs.writeFile(outputPath, pdf);
+    lastOutputDirectory = path.dirname(outputPath);
+    await persistPreferences().catch((error) => console.warn('Could not remember the export folder:', error.message));
+    sendStatus('exported', { outputPath });
+    return { outputPath };
+  }
+}
+
+async function openFileDialog() {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    title: 'Choose an HTML file',
+    properties: ['openFile'],
+    filters: [{ name: 'HTML', extensions: ['html', 'htm'] }]
+  });
+  if (result.canceled || !result.filePaths[0]) return { canceled: true };
+  return loadDocument(result.filePaths[0]);
 }
 
 function registerIpc() {
   ipcMain.handle('studio:open-file', async () => {
-    const result = await dialog.showOpenDialog(mainWindow, {
-      title: 'Choose an HTML file',
-      properties: ['openFile'],
-      filters: [{ name: 'HTML', extensions: ['html', 'htm'] }]
-    });
-    if (result.canceled || !result.filePaths[0]) return { canceled: true };
-    return loadDocument(result.filePaths[0]);
+    return openFileDialog();
   });
   ipcMain.handle('studio:load-path', (_event, filePath) => loadDocument(filePath));
   ipcMain.handle('studio:update-settings', async (_event, settings) => {
@@ -369,7 +424,7 @@ function registerIpc() {
   ipcMain.handle('studio:validate-selector', async (_event, selector) => {
     if (!renderWindow || renderWindow.isDestroyed()) return { valid: false, message: 'Load an HTML file first.' };
     return renderWindow.webContents.executeJavaScript(`(() => {
-      try { document.querySelectorAll(${JSON.stringify(String(selector || ''))}); return { valid: true }; }
+      try { return { valid: true, matches: document.querySelectorAll(${JSON.stringify(String(selector || ''))}).length }; }
       catch (error) { return { valid: false, message: error.message }; }
     })()`);
   });
@@ -409,6 +464,7 @@ async function createMainWindow() {
   await mainWindow.loadFile(RENDERER_FILE);
   mainWindow.on('resize', layoutPreview);
   mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  installKeyboardShortcuts(mainWindow.webContents);
   mainWindow.webContents.on('will-navigate', (event, url) => {
     if (!url.startsWith('file:')) event.preventDefault();
   });
@@ -448,6 +504,7 @@ async function runCliConversion(cli) {
 
 app.whenReady().then(async () => {
   registerIpc();
+  await loadPreferences();
   const cli = parseCli();
   if (cli) return runCliConversion(cli);
   const startupFile = parseStartupFile();

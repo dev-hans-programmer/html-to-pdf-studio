@@ -24,7 +24,12 @@ const elements = {
   previewStateLabel: $('#preview-state-label'),
   themeToggle: $('#theme-toggle'),
   themeToggleLabel: $('#theme-toggle-label'),
-  emptyBrowse: $('#empty-browse-button')
+  emptyBrowse: $('#empty-browse-button'),
+  selectorValidation: $('#selector-validation'),
+  adjustmentValidation: $('#adjustment-validation'),
+  pageValidation: $('#page-validation'),
+  undo: $('#undo-button'),
+  redo: $('#redo-button')
 };
 
 const ruleFields = {
@@ -56,8 +61,14 @@ let currentFile = '';
 let settings = null;
 let sections = [];
 let debounceTimer = null;
+let selectorValidationTimer = null;
+let selectorValidationSequence = 0;
 let pendingSettingsUpdate = Promise.resolve();
 let updateInProgress = false;
+let committedSettings = null;
+let undoStack = [];
+let redoStack = [];
+const HISTORY_LIMIT = 60;
 
 function setStatus(message, kind = '') {
   elements.status.textContent = message;
@@ -72,6 +83,101 @@ function setBusy(busy) {
   elements.load.disabled = busy;
   elements.export.disabled = busy || !currentFile;
   elements.previewState.classList.toggle('is-busy', busy);
+}
+
+function renderHistoryButtons() {
+  elements.undo.disabled = undoStack.length === 0 || !currentFile;
+  elements.redo.disabled = redoStack.length === 0 || !currentFile;
+}
+
+function showValidation(element, message, kind = 'empty') {
+  element.textContent = message;
+  element.className = `validation-line is-${kind}`;
+}
+
+function isSupportedCssColor(value) {
+  const color = value.trim();
+  if (!color) return true;
+  if (!CSS.supports('color', color)) return false;
+  if (/^#[\da-f]{3,4}(?:[\da-f]{2}){0,2}$/i.test(color)) return true;
+  if (/^[a-z]{1,24}$/i.test(color) && !/^(?:inherit|initial|unset|revert|revert-layer)$/i.test(color)) return true;
+  return /^(?:rgb|rgba|hsl|hsla)\(\s*[\d.%\s,+\-/]+\s*\)$/i.test(color);
+}
+
+function validateFieldValues() {
+  const numericFields = [
+    ruleFields.marginTop, ruleFields.marginBottom, ruleFields.marginLeft, ruleFields.marginRight,
+    ruleFields.paddingTop, ruleFields.paddingBottom, ruleFields.fontScale, ruleFields.lineHeight
+  ];
+  const validateNumbers = (inputs) => {
+    let message = '';
+    for (const input of inputs) {
+      const invalid = (!input.validity.valid && input.value !== '') || input.validity.badInput;
+      input.classList.toggle('is-invalid', invalid);
+      input.setAttribute('aria-invalid', String(invalid));
+      if (invalid && !message) {
+        const label = input.closest('.field')?.querySelector('span')?.textContent || input.id.replaceAll('-', ' ');
+        message = `${label}: ${input.validationMessage || 'Enter a value within the allowed range.'}`;
+      }
+    }
+    return message;
+  };
+  const pageMessage = validateNumbers(elements.pageMode.value === 'custom' ? Object.values(marginFields) : []);
+  const ruleMessage = validateNumbers(numericFields);
+  showValidation(elements.pageValidation, pageMessage, pageMessage ? 'error' : 'empty');
+  let firstMessage = ruleMessage;
+  for (const input of [ruleFields.color, ruleFields.backgroundColor]) {
+    const invalid = !isSupportedCssColor(input.value);
+    input.classList.toggle('is-invalid', invalid);
+    input.setAttribute('aria-invalid', String(invalid));
+    if (invalid && !firstMessage) firstMessage = 'Use a supported CSS color name, hex, rgb(), or hsl() value.';
+  }
+  showValidation(elements.adjustmentValidation, firstMessage, firstMessage ? 'error' : 'empty');
+  return !pageMessage && !firstMessage;
+}
+
+function currentValidationMessage() {
+  return elements.adjustmentValidation.textContent || elements.pageValidation.textContent || 'Fix the highlighted values before applying changes.';
+}
+
+async function validateSelectorValue() {
+  const selector = elements.selector.value.trim();
+  const sequence = ++selectorValidationSequence;
+  if (!selector || !currentFile) {
+    elements.selector.classList.remove('is-invalid');
+    elements.selector.setAttribute('aria-invalid', 'false');
+    showValidation(elements.selectorValidation, 'Use a CSS selector such as .experience or #education.', 'help');
+    return null;
+  }
+  try {
+    const validation = await window.studioApi.validateSelector(selector);
+    if (sequence !== selectorValidationSequence || selector !== elements.selector.value.trim()) return null;
+    if (!validation.valid) {
+      elements.selector.classList.add('is-invalid');
+      elements.selector.setAttribute('aria-invalid', 'true');
+      showValidation(elements.selectorValidation, `Invalid CSS selector: ${validation.message}`, 'error');
+      return validation;
+    }
+    elements.selector.classList.remove('is-invalid');
+    elements.selector.setAttribute('aria-invalid', 'false');
+    if (validation.matches === 0) {
+      showValidation(elements.selectorValidation, 'Valid selector, but it does not match any elements in this document.', 'warning');
+    } else {
+      showValidation(elements.selectorValidation, `Selector matches ${validation.matches} ${validation.matches === 1 ? 'element' : 'elements'}.`, 'valid');
+    }
+    return validation;
+  } catch (error) {
+    if (sequence === selectorValidationSequence) showValidation(elements.selectorValidation, error.message || String(error), 'error');
+    return null;
+  }
+}
+
+function scheduleSelectorValidation(delay = 250) {
+  window.clearTimeout(selectorValidationTimer);
+  selectorValidationTimer = window.setTimeout(() => {
+    selectorValidationTimer = null;
+    validateSelectorValue();
+  }, delay);
 }
 
 function setPreviewDocument(fileName = '') {
@@ -139,10 +245,17 @@ function fillRuleForm(rule = null) {
   ruleFields.breakBefore.value = rule?.breakBefore || 'auto';
   ruleFields.breakAfter.value = rule?.breakAfter || 'auto';
   ruleFields.keepTogether.checked = Boolean(rule?.keepTogether);
+  validateFieldValues();
+  scheduleSelectorValidation(0);
 }
 
-function hydrateSettings(value) {
+function hydrateSettings(value, { resetHistory = true, resetRuleForm = resetHistory } = {}) {
   settings = structuredClone(value);
+  if (resetHistory) {
+    committedSettings = structuredClone(settings);
+    undoStack = [];
+    redoStack = [];
+  }
   elements.pageMode.value = settings.pageMode || 'document';
   elements.pageSize.value = settings.pageSize || 'A4';
   elements.orientation.value = settings.orientation || 'portrait';
@@ -150,8 +263,11 @@ function hydrateSettings(value) {
   for (const [key, input] of Object.entries(marginFields)) input.value = settings.margins?.[key] ?? 12;
   elements.customCss.value = settings.customCss || '';
   elements.customPage.classList.toggle('is-hidden', elements.pageMode.value !== 'custom');
+  if (resetRuleForm) fillRuleForm();
   renderSectionOptions();
   renderRules();
+  renderHistoryButtons();
+  validateFieldValues();
 }
 
 function renderSectionOptions() {
@@ -187,7 +303,6 @@ function renderRules() {
     const main = document.createElement('button');
     main.type = 'button';
     main.className = 'rule-card-main';
-    main.style.cssText = 'min-width:0; flex:1; padding:0; text-align:left; background:none; border:0; cursor:pointer;';
     const title = document.createElement('div');
     title.className = 'rule-card-title';
     title.textContent = rule.label || rule.selector;
@@ -196,16 +311,37 @@ function renderRules() {
     selector.textContent = rule.selector;
     const summary = document.createElement('div');
     summary.className = 'rule-card-summary';
-    const details = [];
-    for (const [key, label] of [['marginTop', 'top'], ['marginBottom', 'bottom'], ['marginLeft', 'left'], ['marginRight', 'right']]) {
-      if (rule[key] !== '' && rule[key] !== null && rule[key] !== undefined) details.push(`${label} margin ${rule[key]} mm`);
+    const addChip = (label, color = '') => {
+      const chip = document.createElement('span');
+      chip.className = 'rule-card-chip';
+      if (color) {
+        const swatch = document.createElement('span');
+        swatch.className = 'rule-color-swatch';
+        swatch.style.backgroundColor = color;
+        chip.append(swatch);
+      }
+      chip.append(document.createTextNode(label));
+      summary.append(chip);
+    };
+    for (const [key, label] of [['marginTop', 'Top margin'], ['marginBottom', 'Bottom margin'], ['marginLeft', 'Left margin'], ['marginRight', 'Right margin']]) {
+      if (rule[key] !== '' && rule[key] !== null && rule[key] !== undefined) addChip(`${label} ${rule[key]} mm`);
     }
-    if (rule.fontScale !== '' && rule.fontScale !== null && rule.fontScale !== undefined) details.push(`font ${rule.fontScale}%`);
-    if (rule.color) details.push(`text ${rule.color}`);
-    if (rule.backgroundColor) details.push(`background ${rule.backgroundColor}`);
-    summary.textContent = details.join(' · ') || 'Section adjustment active';
+    for (const [key, label] of [['paddingTop', 'Top padding'], ['paddingBottom', 'Bottom padding']]) {
+      if (rule[key] !== '' && rule[key] !== null && rule[key] !== undefined) addChip(`${label} ${rule[key]} mm`);
+    }
+    if (rule.fontScale !== '' && rule.fontScale !== null && rule.fontScale !== undefined) addChip(`Font ${rule.fontScale}%`);
+    if (rule.lineHeight !== '' && rule.lineHeight !== null && rule.lineHeight !== undefined) addChip(`Line height ${rule.lineHeight}`);
+    if (rule.color) addChip(`Text ${rule.color}`, rule.color);
+    if (rule.backgroundColor) addChip(`Background ${rule.backgroundColor}`, rule.backgroundColor);
+    if (rule.breakBefore && rule.breakBefore !== 'auto') addChip(`Break before: ${rule.breakBefore}`);
+    if (rule.breakAfter && rule.breakAfter !== 'auto') addChip(`Break after: ${rule.breakAfter}`);
+    if (rule.keepTogether) addChip('Keep together');
+    if (!summary.childElementCount) summary.textContent = 'No active overrides';
     main.append(title, selector, summary);
-    main.addEventListener('click', () => fillRuleForm(rule));
+    main.addEventListener('click', () => {
+      fillRuleForm(rule);
+      scheduleSelectorValidation(0);
+    });
 
     const remove = document.createElement('button');
     remove.className = 'rule-delete';
@@ -252,25 +388,49 @@ async function syncRuleFormToSettings() {
     return;
   }
 
-  if (rule.color && !CSS.supports('color', rule.color)) throw new Error('Enter a valid CSS text color, such as #1a3f7a or navy.');
-  if (rule.backgroundColor && !CSS.supports('color', rule.backgroundColor)) throw new Error('Enter a valid CSS background color, such as #f3f6fa or white.');
+  if (rule.color && !isSupportedCssColor(rule.color)) throw new Error('Enter a supported CSS text color, such as #1a3f7a or navy.');
+  if (rule.backgroundColor && !isSupportedCssColor(rule.backgroundColor)) throw new Error('Enter a supported CSS background color, such as #f3f6fa or white.');
   const validation = await window.studioApi.validateSelector(rule.selector);
-  if (!validation.valid) throw new Error(`Invalid CSS selector: ${validation.message}`);
+  if (!validation.valid) {
+    elements.selector.classList.add('is-invalid');
+    elements.selector.setAttribute('aria-invalid', 'true');
+    showValidation(elements.selectorValidation, `Invalid CSS selector: ${validation.message}`, 'error');
+    throw new Error(`Invalid CSS selector: ${validation.message}`);
+  }
+  elements.selector.classList.remove('is-invalid');
+  elements.selector.setAttribute('aria-invalid', 'false');
+  if (validation.matches === 0) showValidation(elements.selectorValidation, 'Valid selector, but it does not match any elements in this document.', 'warning');
+  else showValidation(elements.selectorValidation, `Selector matches ${validation.matches} ${validation.matches === 1 ? 'element' : 'elements'}.`, 'valid');
   if (existingIndex >= 0) settings.sectionRules[existingIndex] = rule;
   else settings.sectionRules.push(rule);
   renderRules();
 }
 
 async function applySettingsUpdate() {
+  const earlierUpdate = pendingSettingsUpdate;
+  try { await earlierUpdate; } catch {}
+  if (!validateFieldValues()) throw new Error(currentValidationMessage());
+  const before = structuredClone(committedSettings || settings);
   readSettingsFromForm();
   await syncRuleFormToSettings();
+  const next = structuredClone(settings);
+  if (JSON.stringify(next) === JSON.stringify(before)) return;
   setStatus('Saving adjustments and rendering PDF preview...');
-  await window.studioApi.updateSettings(structuredClone(settings));
+  await window.studioApi.updateSettings(next);
+  undoStack.push(before);
+  if (undoStack.length > HISTORY_LIMIT) undoStack.shift();
+  redoStack = [];
+  committedSettings = next;
+  renderHistoryButtons();
 }
 
 function queueSettingsUpdate(delay = 350) {
   if (!currentFile || !settings) return;
   window.clearTimeout(debounceTimer);
+  if (!validateFieldValues()) {
+    setStatus(currentValidationMessage(), 'error');
+    return;
+  }
   debounceTimer = window.setTimeout(async () => {
     debounceTimer = null;
     try {
@@ -283,12 +443,61 @@ function queueSettingsUpdate(delay = 350) {
 }
 
 async function flushSettingsUpdate() {
+  if (!validateFieldValues()) throw new Error(currentValidationMessage());
   if (debounceTimer !== null) {
     window.clearTimeout(debounceTimer);
     debounceTimer = null;
     pendingSettingsUpdate = applySettingsUpdate();
   }
   await pendingSettingsUpdate;
+}
+
+async function moveHistory(direction) {
+  if (!currentFile || !settings) return;
+  if (debounceTimer !== null) {
+    window.clearTimeout(debounceTimer);
+    debounceTimer = null;
+    try {
+      pendingSettingsUpdate = applySettingsUpdate();
+      await pendingSettingsUpdate;
+    } catch {}
+  }
+  try { await pendingSettingsUpdate; } catch {}
+  const source = direction === 'undo' ? undoStack : redoStack;
+  const destination = direction === 'undo' ? redoStack : undoStack;
+  if (!source.length) return;
+
+  const current = structuredClone(committedSettings || settings);
+  const target = source.pop();
+  destination.push(current);
+  const selectedSelector = elements.selector.value.trim();
+  hydrateSettings(target, { resetHistory: false, resetRuleForm: false });
+  const restoredRule = target.sectionRules.find((rule) => rule.selector === selectedSelector);
+  fillRuleForm(restoredRule || (selectedSelector ? { selector: selectedSelector } : null));
+  validateFieldValues();
+  renderHistoryButtons();
+  setStatus(direction === 'undo' ? 'Undoing last adjustment...' : 'Redoing adjustment...');
+  try {
+    await window.studioApi.updateSettings(structuredClone(target));
+    committedSettings = structuredClone(target);
+    renderHistoryButtons();
+  } catch (error) {
+    destination.pop();
+    source.push(target);
+    hydrateSettings(current, { resetHistory: false, resetRuleForm: false });
+    const restoredCurrent = current.sectionRules.find((rule) => rule.selector === selectedSelector);
+    fillRuleForm(restoredCurrent || (selectedSelector ? { selector: selectedSelector } : null));
+    renderHistoryButtons();
+    throw error;
+  }
+}
+
+function undoSettings() {
+  return moveHistory('undo').catch((error) => setStatus(error.message || String(error), 'error'));
+}
+
+function redoSettings() {
+  return moveHistory('redo').catch((error) => setStatus(error.message || String(error), 'error'));
 }
 
 async function loadPath(filePath) {
@@ -342,10 +551,12 @@ function usePickedSection() {
   const existing = settings.sectionRules.find((rule) => rule.selector === selector);
   if (existing) {
     fillRuleForm(existing);
+    scheduleSelectorValidation(0);
     return;
   }
   elements.selector.value = selector;
   fillRuleForm({ selector, label: sections.find((item) => item.selector === selector)?.label });
+  scheduleSelectorValidation(0);
 }
 
 function applyPreset(name) {
@@ -379,16 +590,15 @@ async function addOrUpdateRule() {
     setStatus('Enter at least one section adjustment first.', 'error');
     return;
   }
-  if (rule.color && !CSS.supports('color', rule.color)) {
-    setStatus('Enter a valid CSS text color, such as #1a3f7a or navy.', 'error');
-    return;
-  }
-  if (rule.backgroundColor && !CSS.supports('color', rule.backgroundColor)) {
-    setStatus('Enter a valid CSS background color, such as #f3f6fa or white.', 'error');
+  if (!validateFieldValues()) {
+    setStatus('Fix the highlighted values before applying changes.', 'error');
     return;
   }
   const validation = await window.studioApi.validateSelector(rule.selector);
   if (!validation.valid) {
+    elements.selector.classList.add('is-invalid');
+    elements.selector.setAttribute('aria-invalid', 'true');
+    showValidation(elements.selectorValidation, `Invalid CSS selector: ${validation.message}`, 'error');
     setStatus(`Invalid CSS selector: ${validation.message}`, 'error');
     return;
   }
@@ -403,6 +613,7 @@ async function exportPdf() {
     setStatus('Creating PDF...');
     const result = await window.studioApi.exportPdf();
     if (result?.outputPath) setStatus(`Saved ${result.outputPath}`, 'success');
+    else if (result?.canceled) setStatus('Export canceled.');
   } catch (error) {
     setStatus(error.message || String(error), 'error');
   } finally {
@@ -416,8 +627,14 @@ elements.load.addEventListener('click', () => loadPath(elements.pathInput.value)
 elements.pathInput.addEventListener('keydown', (event) => { if (event.key === 'Enter') loadPath(elements.pathInput.value); });
 elements.useSection.addEventListener('click', usePickedSection);
 elements.sectionPicker.addEventListener('change', usePickedSection);
-elements.selector.addEventListener('input', () => queueSettingsUpdate(500));
-elements.selector.addEventListener('change', () => queueSettingsUpdate(0));
+elements.selector.addEventListener('input', () => {
+  scheduleSelectorValidation();
+  queueSettingsUpdate(500);
+});
+elements.selector.addEventListener('change', () => {
+  scheduleSelectorValidation(0);
+  queueSettingsUpdate(0);
+});
 $('#add-rule-button').addEventListener('click', addOrUpdateRule);
 $('#clear-rule-form-button').addEventListener('click', () => fillRuleForm());
 elements.pageMode.addEventListener('change', () => {
@@ -429,7 +646,10 @@ for (const input of [elements.pageSize, elements.orientation, elements.backgroun
   input.addEventListener('input', () => queueSettingsUpdate(450));
 }
 for (const input of Object.values(ruleFields)) {
-  input.addEventListener('input', () => queueSettingsUpdate(500));
+  input.addEventListener('input', () => {
+    validateFieldValues();
+    queueSettingsUpdate(500);
+  });
   input.addEventListener('change', () => queueSettingsUpdate(0));
 }
 elements.customCss.addEventListener('input', () => queueSettingsUpdate(650));
@@ -440,8 +660,30 @@ elements.reset.addEventListener('click', async () => {
   catch (error) { setStatus(error.message || String(error), 'error'); }
 });
 elements.export.addEventListener('click', exportPdf);
+elements.undo.addEventListener('click', undoSettings);
+elements.redo.addEventListener('click', redoSettings);
 elements.themeToggle.addEventListener('click', () => {
   setTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
+});
+window.addEventListener('keydown', (event) => {
+  const modifier = event.metaKey || event.ctrlKey;
+  if (!modifier || event.altKey || event.repeat) return;
+  const key = event.key.toLowerCase();
+  const target = event.target;
+  const textEditing = target instanceof HTMLElement && (
+    target.isContentEditable
+    || target instanceof HTMLTextAreaElement
+    || (target instanceof HTMLInputElement && ['text', 'search', 'url', 'email', 'password'].includes(target.type))
+  );
+  if (textEditing) return;
+  if (key === 'z') {
+    event.preventDefault();
+    if (event.shiftKey) redoSettings();
+    else undoSettings();
+  } else if (key === 'y') {
+    event.preventDefault();
+    redoSettings();
+  }
 });
 document.querySelectorAll('[data-preset]').forEach((button) => {
   button.addEventListener('click', () => applyPreset(button.dataset.preset));
@@ -459,6 +701,13 @@ catch { setTheme('light'); }
 setPreviewDocument();
 
 window.studioApi.onStatus((event) => {
+  if (event.type === 'shortcut') {
+    if (event.action === 'open') openFilePicker();
+    else if (event.action === 'export') exportPdf();
+    else if (event.action === 'undo') undoSettings();
+    else if (event.action === 'redo') redoSettings();
+    return;
+  }
   if (event.type === 'rendering') {
     updateInProgress = true;
     elements.export.disabled = true;

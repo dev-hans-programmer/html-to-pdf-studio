@@ -121,6 +121,14 @@ select { padding-right: 24px; }
 textarea { resize: vertical; min-height: 96px; line-height: 1.5; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10.5px; }
 .full-input { margin-bottom: 9px; }
 .field-label { display: block; margin: 0 0 5px; color: var(--muted-strong); font-size: 10px; font-weight: 670; }
+.validation-line { margin: -3px 0 9px; color: var(--muted); font-size: 9px; line-height: 1.4; }
+.validation-line code { padding: 1px 3px; color: var(--muted-strong); background: var(--surface-subtle); border-radius: 3px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.validation-line.is-empty { display: none; }
+.validation-line.is-error { color: var(--red); }
+.validation-line.is-warning { color: #b77a25; }
+.validation-line.is-valid { color: var(--green); }
+:root[data-theme="dark"] .validation-line.is-warning { color: #e0b46d; }
+input.is-invalid, select.is-invalid { border-color: var(--red) !important; box-shadow: 0 0 0 2px color-mix(in srgb, var(--red) 16%, transparent); }
 
 .button {
   display: inline-flex;
@@ -184,7 +192,9 @@ textarea { resize: vertical; min-height: 96px; line-height: 1.5; font-family: ui
 .rule-card-main { min-width: 0; flex: 1; padding: 0; color: inherit; text-align: left; background: none; border: 0; cursor: pointer; }
 .rule-card-title { overflow: hidden; color: var(--text-strong); font-size: 10px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
 .rule-card-selector { overflow: hidden; margin-top: 2px; color: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 8.5px; text-overflow: ellipsis; white-space: nowrap; }
-.rule-card-summary { overflow: hidden; margin-top: 3px; color: var(--muted-strong); font-size: 8.5px; text-overflow: ellipsis; white-space: nowrap; }
+.rule-card-summary { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; color: var(--muted-strong); font-size: 8.5px; line-height: 1.35; }
+.rule-card-chip { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; padding: 3px 5px; color: var(--muted-strong); background: var(--surface); border: 1px solid var(--border); border-radius: 5px; overflow-wrap: anywhere; }
+.rule-color-swatch { width: 9px; height: 9px; flex: 0 0 auto; border: 1px solid color-mix(in srgb, var(--text) 20%, transparent); border-radius: 3px; }
 .rule-delete { display: grid; flex: 0 0 auto; width: 25px; height: 25px; place-items: center; color: var(--muted); background: transparent; border: 0; border-radius: 6px; font-size: 16px; cursor: pointer; }
 .rule-delete:hover { color: var(--red); background: color-mix(in srgb, var(--red) 12%, transparent); }
 
@@ -209,6 +219,12 @@ textarea { resize: vertical; min-height: 96px; line-height: 1.5; font-family: ui
 .preview-toolbar-title { color: var(--text-strong); font-size: 11px; font-weight: 760; letter-spacing: -0.1px; }
 .preview-toolbar-file { overflow: hidden; margin-top: 3px; color: var(--muted); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
 .preview-toolbar-actions { gap: 17px; }
+.history-actions { display: inline-flex; align-items: center; gap: 4px; }
+.history-button { display: grid; width: 30px; height: 30px; place-items: center; color: var(--muted-strong); background: transparent; border: 1px solid transparent; border-radius: 7px; cursor: pointer; transition: color 130ms ease, background 130ms ease, border-color 130ms ease; }
+.history-button:hover:not(:disabled) { color: var(--text-strong); background: var(--surface-hover); border-color: var(--border); }
+.history-button:focus-visible { outline: 3px solid color-mix(in srgb, var(--blue) 35%, transparent); outline-offset: 2px; }
+.history-button:disabled { opacity: 0.38; cursor: default; }
+.history-button svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.65; stroke-linecap: round; stroke-linejoin: round; }
 .preview-state { display: inline-flex; align-items: center; gap: 6px; color: var(--muted-strong); font-size: 9.5px; }
 .state-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 3px color-mix(in srgb, var(--green) 13%, transparent); }
 .preview-state.is-busy .state-dot { background: #d39b43; box-shadow: 0 0 0 3px rgba(211, 155, 67, 0.14); }

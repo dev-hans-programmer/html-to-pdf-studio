@@ -22,6 +22,9 @@ Choose an HTML file with **Browse**, paste a path and press **Load**, or drag an
 - Section and page changes save automatically and regenerate the PDF preview. Export waits for any pending edit to finish rendering.
 - Use section presets for tighter spacing, smaller text, or added space above a section.
 - Switch between light and dark app themes; choose colors with a picker or enter any supported CSS color.
+- Adjustment cards summarize active spacing, typography, color, and page-break rules. Invalid values and selectors are highlighted inline.
+- Undo and redo section/page edits with `Cmd/Ctrl+Z` and `Cmd/Ctrl+Shift+Z` (`Cmd/Ctrl+Y` also redoes). Open a file with `Cmd/Ctrl+O` and export with `Cmd/Ctrl+E`.
+- PDF export suggests a filename based on the HTML file, remembers the last output folder, and confirms before replacing an existing PDF.
 - Add advanced CSS overrides for other print-specific fixes.
 - Settings are saved locally per source file. The source HTML is never rewritten.
 
